@@ -140,8 +140,8 @@ public with sharing class DMLOperations {
 
         Map<String,Opportunity> oppsMap = new Map<String,Opportunity>([SELECT Id FROM Opportunity WHERE Name IN :oppNames]);
         for (String oppName: oppNames) {
+            Opportunity opp;
             if(oppsMap.containsKey(OppName)) {
-                Opportunity opp;
                 opp = oppsMap.get(oppName);
             } else {
                 opp = new Opportunity(Name = oppName, AccountId = acc.Id, StageName = 'Prospect', CloseDate = Date.today());
