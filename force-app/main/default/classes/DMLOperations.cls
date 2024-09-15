@@ -134,22 +134,22 @@ public with sharing class DMLOperations {
         if(findAcc.isEmpty()) {
             acc.Name = accountName;
             insert acc;
-        } else acc = [SELECT Id FROM Account WHERE Name= :accountName];
+        } else {
+            acc = findAcc[0];
+        }
 
-        List<Opportunity> opp = [SELECT Id FROM Opportunity WHERE Name IN :oppNames];
-        for (String s: oppNames) {
-            if(opp.isEmpty()) {
-                Opportunity createNewOpp = new Opportunity();
-                createNewOpp.Name = s;
-                createNewOpp.AccountId = acc.Id;
-                createNewOpp.StageName = 'Prospect';
-                createNewOpp.CloseDate = Date.today();
-                newOpp.add(createNewOpp);
+        Map<String,Opportunity> oppsMap = new Map<String,Opportunity>([SELECT Id FROM Opportunity WHERE Name IN :oppNames]);
+        for (String oppName: oppNames) {
+            if(oppsMap.containsKey(OppName)) {
+                Opportunity opp;
+                opp = oppsMap.get(oppName);
             } else {
-                Opportunity createNewOpp = new Opportunity();
-                createNewOpp = [SELECT Id FROM Opportunity WHERE Name = :s];
-                newOpp.add(createNewOpp);
+                opp.Name = oppName;
+                opp.AccountId = acc.Id;
+                opp.StageName = 'Prospect';
+                opp.CloseDate = Date.today();
             }
+            newOpp.add(opp);
         }
         upsert newOpp;
     }
@@ -163,18 +163,13 @@ public with sharing class DMLOperations {
 	 * @return The Account that was upserted.
 	 */
 	public static Account upsertAccount(String accountName) {
-		List<Account> accounts = [SELECT Id FROM Account WHERE Name = :accountName];
-         if(accounts.isEmpty() == false) {
-            Account acc = new Account();
-            acc = [SELECT Id FROM Account WHERE Name = :accountName];
+		Account acc = [SELECT Id FROM Account WHERE Name = :accountName];
+         if(acc != null) {
             acc.Description = 'Updated Account';
-            update acc;
-            return acc;
+         } else {
+            acc = New Account(Name = accountName, Description = 'New Account');
          }
-         Account acc = new Account();
-         acc.Name = accountName;
-         acc.Description = 'New Account';
-         insert acc;
+         upsert acc;
          return acc; 
 	}
 
@@ -188,19 +183,31 @@ public with sharing class DMLOperations {
 	 * @param contactsToUpsert List of Contacts to be upserted and linked to accounts.
 	 */
 	public static void upsertAccountsWithContacts(List<Contact> contactsToUpsert) {
-        String accountName;
-        for(Contact c: contactsToUpsert) {
-            accountName = c.LastName;
-            List<Account> acc = [SELECT Id FROM Account WHERE Name = :accountName];
-            if(acc.isEmpty()) {
-                Account newAccount = new Account(Name = accountName);
-                insert newAccount;
-                c.AccountId = newAccount.Id;
-            }else {
-                Account existingAcc = acc[0];
-                c.AccountId = existingAcc.Id;
-            }  
+        Set<String> accountNames = new Set<String>();
+        List<Account> newAccounts = new List<Account>();
+        List<Contact> updateContacts = new List<Contact>();
+        for(Contact conLastName: contactsToUpsert) {
+            accountNames.add(conLastName.LastName);
         }
+        Map<String,Account> existingAccounts = new Map<String, Account>([SELECT Id, Name From Account WHERE Name IN :accountNames]);
+        for(Contact con: contactsToUpsert) {
+            Account acc = existingAccounts.get(con.LastName);
+            if(acc == null) {
+                acc = new Account(Name = con.LastName);
+                newAccounts.add(acc);
+            }
+            con.AccountId = acc.Id;
+            updateContacts.add(con);
+        }
+        insert newAccounts;
+        for(Account acc: newAccounts) {
+            for(Contact con: updateContacts) {
+                if(con.LastName == acc.Name && con.AccountId != acc.Id) {
+                    con.AccountId = acc.Id;
+                }
+            }
+        }
+        upsert updateContacts;
 	}
 
     /**
