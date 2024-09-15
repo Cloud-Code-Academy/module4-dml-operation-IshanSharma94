@@ -144,10 +144,7 @@ public with sharing class DMLOperations {
                 Opportunity opp;
                 opp = oppsMap.get(oppName);
             } else {
-                opp.Name = oppName;
-                opp.AccountId = acc.Id;
-                opp.StageName = 'Prospect';
-                opp.CloseDate = Date.today();
+                opp = new Opportunity(Name = oppName, AccountId = acc.Id, StageName = 'Prospect', CloseDate = Date.today());
             }
             newOpp.add(opp);
         }
