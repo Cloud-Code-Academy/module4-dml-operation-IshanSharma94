@@ -129,7 +129,7 @@ public with sharing class DMLOperations {
      */
     public static void upsertOpportunities(String accountName, List<String> oppNames) {
         List<Opportunity> newOpp = new List<Opportunity>();
-        List<Account> findAcc = [SELECT Id FROM Account WHERE Name= :accountName];
+        List<Account> findAcc = [SELECT Id, Name FROM Account WHERE Name= :accountName];
         Account acc = new Account();
         if(findAcc.isEmpty()) {
             acc.Name = accountName;
@@ -138,10 +138,13 @@ public with sharing class DMLOperations {
             acc = findAcc[0];
         }
 
-        Map<String,Opportunity> oppsMap = new Map<String,Opportunity>([SELECT Id FROM Opportunity WHERE Name IN :oppNames]);
+        Map<String,Opportunity> oppsMap = new Map<String,Opportunity>();
+        for(Opportunity opp : [SELECT Id, Name FROM Opportunity WHERE Name IN :oppNames]) {
+            oppsMap.put(opp.Name, opp);
+        }
         for (String oppName: oppNames) {
             Opportunity opp;
-            if(oppsMap.containsKey(OppName)) {
+            if(oppsMap.containsKey(oppName)) {
                 opp = oppsMap.get(oppName);
             } else {
                 opp = new Opportunity(Name = oppName, AccountId = acc.Id, StageName = 'Prospect', CloseDate = Date.today());
@@ -160,14 +163,16 @@ public with sharing class DMLOperations {
 	 * @return The Account that was upserted.
 	 */
 	public static Account upsertAccount(String accountName) {
-		Account acc = [SELECT Id FROM Account WHERE Name = :accountName];
-         if(acc != null) {
-            acc.Description = 'Updated Account';
+		List<Account> acc = [SELECT Id, Name FROM Account WHERE Name = :accountName];
+        Account varAcc = new Account();
+         if(!acc.isEmpty()) {
+            varAcc = acc[0];
+            varAcc.Description = 'Updated Account';
          } else {
-            acc = New Account(Name = accountName, Description = 'New Account');
+            varAcc = New Account(Name = accountName, Description = 'New Account');
          }
-         upsert acc;
-         return acc; 
+         upsert varAcc;
+         return varAcc; 
 	}
 
     /**
@@ -186,7 +191,10 @@ public with sharing class DMLOperations {
         for(Contact conLastName: contactsToUpsert) {
             accountNames.add(conLastName.LastName);
         }
-        Map<String,Account> existingAccounts = new Map<String, Account>([SELECT Id, Name From Account WHERE Name IN :accountNames]);
+        Map<String,Account> existingAccounts = new Map<String, Account>();
+        for(Account acc: [SELECT Id, Name From Account WHERE Name IN :accountNames]) {
+            existingAccounts.put(acc.Name, acc);
+        }
         for(Contact con: contactsToUpsert) {
             Account acc = existingAccounts.get(con.LastName);
             if(acc == null) {
@@ -198,10 +206,12 @@ public with sharing class DMLOperations {
         }
         insert newAccounts;
         for(Account acc: newAccounts) {
-            for(Contact con: updateContacts) {
-                if(con.LastName == acc.Name && con.AccountId != acc.Id) {
-                    con.AccountId = acc.Id;
-                }
+            existingAccounts.put(acc.Name,acc);
+        }
+        for(Contact con: updateContacts) {
+            Account acc = existingAccounts.get(con.LastName);
+            if(acc != null) {
+                con.AccountId = acc.Id;
             }
         }
         upsert updateContacts;
